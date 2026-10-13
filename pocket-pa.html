@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pocket PA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one mixer "channel strip" column — power, meter, then sections top to bottom */
+:root{
+  --bg:#eef0f2; --panel:#ffffff; --ink:#16191d; --muted:#5d6670; --line:#d5dae0;
+  --track:#dfe3e8; --accent:#c27400; --live:#cf2f26; --ok:#1c9150; --warn:#c27400;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111417; --panel:#1a1e23; --ink:#e8ebee; --muted:#8d96a0; --line:#2b3139;
+  --track:#2b3139; --accent:#f0a020; --live:#ff5a4f; --ok:#3ccf7a; --warn:#f0a020; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111417; --panel:#1a1e23; --ink:#e8ebee; --muted:#8d96a0; --line:#2b3139;
+  --track:#2b3139; --accent:#f0a020; --live:#ff5a4f; --ok:#3ccf7a; --warn:#f0a020; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);-webkit-tap-highlight-color:transparent}
+.wrap{max-width:30rem;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) 16px max(28px,env(safe-area-inset-bottom));display:grid;gap:14px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-block:6px 2px}
+h1{font:700 1.9rem/1 var(--display);letter-spacing:.02em;margin:0;text-transform:uppercase}
+.pill{font:600 .8rem/1 var(--display);letter-spacing:.12em;text-transform:uppercase;padding:6px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill.on{color:var(--live);border-color:var(--live)}
+.pill.on::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--live);margin-right:6px;vertical-align:1px;animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.pill.on::before{animation:none}}
+
+.power{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+#power{width:76px;height:76px;border-radius:50%;border:3px solid var(--line);background:var(--bg);color:var(--ink);font:700 1rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+#power[aria-pressed="true"]{border-color:var(--live);color:var(--live);box-shadow:0 0 0 4px color-mix(in srgb,var(--live) 18%,transparent)}
+#power:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.meterbox{min-width:0;display:grid;gap:6px}
+.meterhead{display:flex;justify-content:space-between;font:600 .78rem/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.meterhead b{font:500 .8rem/1 var(--mono);letter-spacing:0;color:var(--ink);font-variant-numeric:tabular-nums}
+canvas{width:100%;height:22px;display:block;border-radius:4px;background:var(--track)}
+.scale{display:flex;justify-content:space-between;font:500 .66rem/1 var(--mono);color:var(--muted)}
+#msg{font-size:.9rem;color:var(--muted);margin:0;min-height:1.3em}
+#msg.warn{color:var(--warn);font-weight:600}
+#msg.err{color:var(--live);font-weight:600}
+
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:14px}
+h2{font:600 .85rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;margin:0;color:var(--muted)}
+label.field{display:grid;gap:6px;font-weight:500}
+select{font:inherit;width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.fader{display:grid;gap:6px}
+.fader .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:500}
+.fader output{font:500 .9rem/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:32px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--accent) var(--p,50%),var(--track) var(--p,50%))}
+input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--track)}
+input[type=range]::-moz-range-progress{height:6px;border-radius:3px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:20px;margin-top:-7px;border-radius:4px;background:var(--panel);border:2px solid var(--ink);box-shadow:inset 0 -3px 0 var(--line)}
+input[type=range]::-moz-range-thumb{width:26px;height:16px;border-radius:4px;background:var(--panel);border:2px solid var(--ink)}
+input[type=range]:disabled{opacity:.4}
+.sub{font-size:.85rem;color:var(--muted);margin:-8px 0 0}
+
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.toggle span{display:grid;gap:2px;min-width:0}
+.toggle small{color:var(--muted);font-size:.84rem;line-height:1.35}
+.toggle input{-webkit-appearance:none;appearance:none;flex:none;width:48px;height:28px;border-radius:999px;background:var(--track);position:relative;cursor:pointer;transition:background .15s;margin:0}
+.toggle input::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--panel);box-shadow:0 1px 2px rgb(0 0 0 / .3);transition:transform .15s}
+.toggle input:checked{background:var(--ok)}
+.toggle input:checked::after{transform:translateX(20px)}
+.echoset{display:grid;gap:12px}
+.echoset[aria-disabled="true"]{opacity:.45}
+
+#mute{font:700 1rem/1 var(--display);letter-spacing:.12em;text-transform:uppercase;padding:14px;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;width:100%}
+#mute[aria-pressed="true"]{background:var(--live);border-color:var(--live);color:#fff}
+.tips{font-size:.9rem;color:var(--muted);display:grid;gap:6px;padding:0 4px}
+.tips p{margin:0}
+.tips strong{color:var(--ink)}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>Pocket PA</h1>
+    <span class="pill" id="status">Off</span>
+  </header>
+
+  <div class="power">
+    <button id="power" aria-pressed="false">Go<br>live</button>
+    <div class="meterbox">
+      <div class="meterhead">Mic level <b id="peak">— dB</b></div>
+      <canvas id="meter" width="600" height="44" aria-hidden="true"></canvas>
+      <div class="scale"><span>-60</span><span>-40</span><span>-20</span><span>-10</span><span>0</span></div>
+    </div>
+  </div>
+  <p id="msg" role="status">Tap Go live and allow microphone access. Headphones give the cleanest sound.</p>
+
+  <button id="mute" aria-pressed="false">Mute</button>
+
+  <section aria-labelledby="h-vol">
+    <h2 id="h-vol">Volume</h2>
+    <div class="fader">
+      <div class="top"><label for="vol">Output volume</label><output id="volOut">150% · +3.5 dB</output></div>
+      <input id="vol" type="range" min="0" max="400" step="5" value="150">
+    </div>
+    <p class="sub">Above 100% boosts the mic. The limiter below keeps loud peaks from crackling.</p>
+    <label class="toggle"><span>Limiter<small>Caps loud peaks to protect the speaker</small></span><input type="checkbox" id="limiter" checked></label>
+    <label class="toggle"><span>Low cut (80 Hz)<small>Removes handling thumps and hum</small></span><input type="checkbox" id="lowcut" checked></label>
+  </section>
+
+  <section aria-labelledby="h-route">
+    <h2 id="h-route">Input &amp; output</h2>
+    <label class="field" for="inSel">Microphone
+      <select id="inSel"><option value="">Phone default mic</option></select>
+    </label>
+    <label class="field" for="outSel" id="outWrap" hidden>Play through
+      <select id="outSel"><option value="">System default</option></select>
+    </label>
+    <label class="toggle"><span>Call mic mode<small>Uses the phone's call-style voice processing (echo cancellation). Turn off if your voice sounds choppy.</small></span><input type="checkbox" id="ec"></label>
+    <label class="toggle"><span>Noise suppression<small>Cuts fans, traffic and background hiss</small></span><input type="checkbox" id="ns" checked></label>
+    <label class="toggle"><span>Auto gain<small>Evens out quiet and loud speech</small></span><input type="checkbox" id="agc"></label>
+    <p class="sub" style="margin:0">Output follows your phone: plug in headphones or an aux cable and sound moves there automatically.</p>
+  </section>
+
+  <section aria-labelledby="h-fb">
+    <h2 id="h-fb">Feedback control</h2>
+    <label class="toggle"><span>Squeal guard<small>Detects howling feedback and pulls the volume down</small></span><input type="checkbox" id="guard" checked></label>
+  </section>
+
+  <section aria-labelledby="h-echo">
+    <h2 id="h-echo">Echo effect</h2>
+    <label class="toggle"><span>Echo<small>Adds repeats to your voice, like a stage mic</small></span><input type="checkbox" id="echoOn"></label>
+    <div class="echoset" id="echoSet" aria-disabled="true">
+      <div class="fader">
+        <div class="top"><label for="eTime">Delay time</label><output id="eTimeOut">250 ms</output></div>
+        <input id="eTime" type="range" min="40" max="800" step="10" value="250">
+      </div>
+      <div class="fader">
+        <div class="top"><label for="eFb">Repeats</label><output id="eFbOut">35%</output></div>
+        <input id="eFb" type="range" min="0" max="80" step="1" value="35">
+      </div>
+      <div class="fader">
+        <div class="top"><label for="eMix">Echo amount</label><output id="eMixOut">30%</output></div>
+        <input id="eMix" type="range" min="0" max="100" step="1" value="30">
+      </div>
+    </div>
+  </section>
+
+  <div class="tips">
+    <p><strong>Headphones or aux:</strong> best for live use. With the phone's own speaker the mic hears itself and can squeal, so keep volume lower and the phone pointed away from the speaker.</p>
+    <p><strong>Mic choice:</strong> the list shows whatever mics your phone exposes to the browser (often "default" and sometimes a speakerphone or headset mic). Call mic mode switches to the phone's voice-call processing.</p>
+    <p><strong>Keep the screen on:</strong> the page asks to keep the screen awake while live. Locking the phone may stop the mic.</p>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const S = { vol:1.5, ec:false, ns:true, agc:false, lowcut:true, limiter:true, guard:true,
+              echoOn:false, time:0.25, fb:0.35, mix:0.3, muted:false, inputId:"" };
+  let ctx=null, stream=null, src=null, N={}, live=false, raf=0, wake=null, howl=0, peakHold=-100, peakT=0;
+
+  const msg = (t, cls="") => { const m=$("msg"); m.textContent=t; m.className=cls; };
+  const dB = g => g<=0 ? "−∞ dB" : (20*Math.log10(g) >= 0 ? "+" : "") + (20*Math.log10(g)).toFixed(1) + " dB";
+  const fill = el => el.style.setProperty("--p", ((el.value-el.min)/(el.max-el.min)*100)+"%");
+  const ramp = (param, v) => { if (!ctx) return; param.cancelScheduledValues(ctx.currentTime); param.setTargetAtTime(v, ctx.currentTime, 0.02); };
+
+  function buildGraph(){
+    ctx = new (window.AudioContext||window.webkitAudioContext)({latencyHint:"interactive"});
+    N.hp = ctx.createBiquadFilter(); N.hp.type="highpass"; N.hp.Q.value=0.7;
+    N.an = ctx.createAnalyser(); N.an.fftSize=2048; N.an.smoothingTimeConstant=0.3;
+    N.dry = ctx.createGain();
+    N.delay = ctx.createDelay(1.5); N.fb = ctx.createGain(); N.wet = ctx.createGain();
+    N.vol = ctx.createGain();
+    N.lim = ctx.createDynamicsCompressor(); N.lim.knee.value=0; N.lim.attack.value=0.002; N.lim.release.value=0.12;
+    N.out = ctx.createGain();
+    N.hp.connect(N.an);
+    N.hp.connect(N.dry); N.dry.connect(N.vol);
+    N.hp.connect(N.delay); N.delay.connect(N.fb); N.fb.connect(N.delay); N.delay.connect(N.wet); N.wet.connect(N.vol);
+    N.vol.connect(N.lim); N.lim.connect(N.out); N.out.connect(ctx.destination);
+    applyAll();
+  }
+
+  function applyAll(){
+    if (!ctx) return;
+    ramp(N.vol.gain, S.vol);
+    ramp(N.out.gain, S.muted ? 0 : 1);
+    N.hp.frequency.value = S.lowcut ? 80 : 10;
+    N.lim.threshold.value = S.limiter ? -4 : 0;
+    N.lim.ratio.value = S.limiter ? 20 : 1;
+    ramp(N.delay.delayTime, S.time);
+    ramp(N.fb.gain, S.echoOn ? S.fb : 0);
+    ramp(N.wet.gain, S.echoOn ? S.mix : 0);
+    ramp(N.dry.gain, S.echoOn ? 1 - S.mix*0.35 : 1);
+  }
+
+  async function openMic(){
+    if (stream) stream.getTracks().forEach(t=>t.stop());
+    if (src) { try{src.disconnect()}catch(e){} src=null; }
+    const audio = { echoCancellation:S.ec, noiseSuppression:S.ns, autoGainControl:S.agc, channelCount:1, latency:0 };
+    if (S.inputId) audio.deviceId = { exact:S.inputId };
+    stream = await navigator.mediaDevices.getUserMedia({ audio });
+    src = ctx.createMediaStreamSource(stream);
+    src.connect(N.hp);
+    stream.getAudioTracks()[0].addEventListener("ended", () => { if (live) { stop(); msg("The microphone was disconnected. Tap Go live to reconnect.","err"); } });
+  }
+
+  async function listDevices(){
+    try{
+      const devs = await navigator.mediaDevices.enumerateDevices();
+      const ins = devs.filter(d=>d.kind==="audioinput"), outs = devs.filter(d=>d.kind==="audiooutput");
+      const inSel = $("inSel");
+      inSel.innerHTML = "";
+      const def = document.createElement("option"); def.value=""; def.textContent="Phone default mic"; inSel.appendChild(def);
+      ins.forEach((d,i)=>{ if (d.deviceId==="default") return; const o=document.createElement("option"); o.value=d.deviceId; o.textContent=d.label||("Microphone "+(i+1)); inSel.appendChild(o); });
+      inSel.value = S.inputId;
+      if (ctx && typeof ctx.setSinkId==="function" && outs.length>1){
+        const outSel=$("outSel"); const cur=outSel.value; outSel.innerHTML="";
+        const od=document.createElement("option"); od.value=""; od.textContent="System default"; outSel.appendChild(od);
+        outs.forEach((d,i)=>{ if (d.deviceId==="default") return; const o=document.createElement("option"); o.value=d.deviceId; o.textContent=d.label||("Output "+(i+1)); outSel.appendChild(o); });
+        outSel.value=cur; $("outWrap").hidden=false;
+      }
+    }catch(e){}
+  }
+
+  async function keepAwake(){
+    try{ if ("wakeLock" in navigator) wake = await navigator.wakeLock.request("screen"); }catch(e){}
+  }
+
+  async function start(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      msg("This browser can't use the microphone here. Open the page over https:// in Chrome or Safari.","err"); return;
+    }
+    try{
+      if (!ctx) buildGraph();
+      await ctx.resume();
+      await openMic();
+      live = true; setUI();
+      msg(S.vol>1.5 ? "Live. Watch for squeal if you're using the phone speaker." : "Live. Speak into the mic.");
+      listDevices(); keepAwake(); loop();
+    }catch(e){
+      live=false; setUI();
+      if (e && e.name==="NotAllowedError") msg("Microphone access was blocked. Allow it in the browser's site settings, then tap Go live.","err");
+      else if (e && e.name==="OverconstrainedError") { S.inputId=""; $("inSel").value=""; msg("That mic isn't available. Switched back to the default mic; tap Go live.","err"); }
+      else msg("Couldn't start the mic: "+(e && e.message ? e.message : e),"err");
+    }
+  }
+
+  function stop(){
+    live=false;
+    if (stream) stream.getTracks().forEach(t=>t.stop());
+    stream=null; if (src){ try{src.disconnect()}catch(e){} src=null; }
+    if (ctx) ctx.suspend();
+    if (wake){ wake.release().catch(()=>{}); wake=null; }
+    cancelAnimationFrame(raf); drawMeter(-100,-100); $("peak").textContent="— dB";
+    setUI(); msg("Off. Tap Go live to start again.");
+  }
+
+  function setUI(){
+    $("power").setAttribute("aria-pressed", live);
+    $("power").innerHTML = live ? "Stop" : "Go<br>live";
+    const st=$("status"); st.textContent = live ? (S.muted?"Muted":"Live") : "Off"; st.classList.toggle("on", live && !S.muted);
+    $("mute").setAttribute("aria-pressed", S.muted); $("mute").textContent = S.muted ? "Muted — tap to unmute" : "Mute";
+  }
+
+  // Meter
+  const cv=$("meter"), g2=cv.getContext("2d");
+  function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+  function drawMeter(rmsDb, pkDb){
+    const W=cv.width, H=cv.height, segs=40, gap=3, sw=(W-gap*(segs-1))/segs;
+    g2.clearRect(0,0,W,H);
+    const pos = d => Math.max(0, Math.min(1, (d+60)/60));
+    const lit = pos(rmsDb)*segs, pk = Math.floor(pos(pkDb)*segs);
+    const ok=css("--ok"), warn=css("--warn"), hot=css("--live"), off=css("--line");
+    for (let i=0;i<segs;i++){
+      const d = -60 + (i+1)/segs*60;
+      const c = d > -3 ? hot : d > -12 ? warn : ok;
+      g2.fillStyle = (i < lit || i===pk && pkDb>-60) ? c : off;
+      g2.globalAlpha = (i < lit || i===pk && pkDb>-60) ? 1 : 0.6;
+      g2.fillRect(i*(sw+gap), 4, sw, H-8);
+    }
+    g2.globalAlpha=1;
+  }
+
+  const td = new Float32Array(2048), fd = new Float32Array(1024);
+  function loop(){
+    if (!live) return;
+    N.an.getFloatTimeDomainData(td);
+    let sum=0, pk=0;
+    for (let i=0;i<td.length;i++){ const v=td[i]; sum+=v*v; const a=Math.abs(v); if (a>pk) pk=a; }
+    const rmsDb = 20*Math.log10(Math.sqrt(sum/td.length)+1e-9);
+    const pkDb = 20*Math.log10(pk*S.vol+1e-9);
+    const now=performance.now();
+    if (pkDb>peakHold || now-peakT>1200){ peakHold=pkDb; peakT=now; }
+    drawMeter(rmsDb + 20*Math.log10(Math.max(S.vol,1e-6)), peakHold);
+    $("peak").textContent = (peakHold<-60?"−60":peakHold.toFixed(0))+" dB";
+
+    // Squeal guard: a single loud, narrow tone that persists = feedback
+    if (S.guard && !S.muted){
+      N.an.getFloatFrequencyData(fd);
+      let max=-Infinity, mi=0, avg=0, n=0;
+      for (let i=8;i<fd.length*0.6;i++){ const v=fd[i]; if (v>max){max=v;mi=i;} if (isFinite(v)){avg+=v;n++;} }
+      avg/=n||1;
+      const tonal = max-avg > 38 && rmsDb > -30;
+      howl = tonal ? howl+1 : Math.max(0, howl-2);
+      if (howl > 35){
+        howl=0;
+        S.vol = Math.max(0.2, S.vol*0.6);
+        $("vol").value = Math.round(S.vol*100); fill($("vol")); showVol(); applyAll();
+        const hz = Math.round(mi*ctx.sampleRate/N.an.fftSize);
+        msg("Feedback detected near "+hz+" Hz. Volume lowered to "+Math.round(S.vol*100)+"%. Try headphones or move the phone away from the speaker.","warn");
+      }
+    }
+    raf = requestAnimationFrame(loop);
+  }
+
+  function showVol(){ $("volOut").textContent = Math.round(S.vol*100)+"% · "+dB(S.vol); }
+
+  // Controls
+  $("power").addEventListener("click", ()=> live ? stop() : start());
+  $("mute").addEventListener("click", ()=>{ S.muted=!S.muted; applyAll(); setUI(); });
+
+  document.querySelectorAll('input[type=range]').forEach(r=>{ fill(r); r.addEventListener("input",()=>fill(r)); });
+  $("vol").addEventListener("input", e=>{ S.vol=e.target.value/100; showVol(); applyAll(); });
+  $("eTime").addEventListener("input", e=>{ S.time=e.target.value/1000; $("eTimeOut").textContent=e.target.value+" ms"; applyAll(); });
+  $("eFb").addEventListener("input", e=>{ S.fb=e.target.value/100; $("eFbOut").textContent=e.target.value+"%"; applyAll(); });
+  $("eMix").addEventListener("input", e=>{ S.mix=e.target.value/100; $("eMixOut").textContent=e.target.value+"%"; applyAll(); });
+  $("echoOn").addEventListener("change", e=>{ S.echoOn=e.target.checked; $("echoSet").setAttribute("aria-disabled", !S.echoOn); applyAll(); });
+  ["limiter","lowcut","guard"].forEach(k=> $(k).addEventListener("change", e=>{ S[k]=e.target.checked; applyAll(); }));
+
+  async function reopen(){ if (!live) return; try{ await openMic(); msg("Mic settings updated."); }catch(e){ msg("Couldn't apply that mic setting: "+(e.message||e),"err"); } }
+  ["ec","ns","agc"].forEach(k=> $(k).addEventListener("change", e=>{ S[k]=e.target.checked; reopen(); }));
+  $("inSel").addEventListener("change", e=>{ S.inputId=e.target.value; reopen(); });
+  $("outSel").addEventListener("change", async e=>{
+    try{ await ctx.setSinkId(e.target.value); msg("Output switched."); }catch(err){ msg("Couldn't switch output: "+(err.message||err),"err"); }
+  });
+
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener)
+    navigator.mediaDevices.addEventListener("devicechange", listDevices);
+  document.addEventListener("visibilitychange", ()=>{ if (live && document.visibilityState==="visible"){ keepAwake(); ctx && ctx.resume(); } });
+
+  showVol(); drawMeter(-100,-100);
+})();
+</script>
+</body>
+</html>
